@@ -16,6 +16,8 @@ createWindow () = do
 drawLoop :: Bool -> WindowResources -> IO ()
 drawLoop False w = do
     beginDrawing
+    drawText "Wow so cool" 30 40 18 lightGray
+    clearBackground rayWhite
     endDrawing
     s <- windowShouldClose
     drawLoop s w
