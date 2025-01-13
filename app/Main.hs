@@ -1,3 +1,13 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Main where
 
 
@@ -5,7 +15,25 @@ import Raylib.Core (clearBackground, beginDrawing, endDrawing, initWindow, setTa
 import Raylib.Core.Text (drawText)
 import Raylib.Util (drawing, raylibApplication, WindowResources)
 import Raylib.Util.Colors (lightGray, rayWhite)
+import Apecs
+import Linear
+import System.Random
+import System.Exit
+import Control.Monad
+import Data.Monoid
+import Data.Semigroup (Semigroup)
 
+
+
+newtype Position = Position (V2 Float) deriving Show
+instance Component Position where type Storage Position = Map Position
+makeWorld "World" [''Position]
+
+type System' a = System World a
+
+initialize :: System' ()
+initialize = do
+  return ()
 
 createWindow :: () -> IO WindowResources
 createWindow () = do
