@@ -76,7 +76,10 @@ executable hard-game
         random,
         time,
         brick,
-        vty
+        vty,
+        lens,
+        extra,
+        mtl
 
     -- Directories containing source files.
     hs-source-dirs:   app

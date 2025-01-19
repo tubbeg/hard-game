@@ -24,6 +24,8 @@ import Data.Fixed (Pico)
 import Brick
 import qualified Graphics.Vty as V
 import qualified Brick.Widgets.Border as V.Vty
+import Control.Monad.State.Class as MS
+
 
 {-
 
@@ -96,33 +98,83 @@ myApp :: App String Int Int -> String
 myApp a = ""
 
 data TickUpdate = Tick
-data GameState = MyState -- I can switch this with the ECS
+data GameState = DefState | KEYDOWN | MOUSESUPPORT -- I can switch this with the ECS
 
 -- this function could update the game loop (ECS)
 drawGame :: GameState -> [Widget ()]
-drawGame gs =
+drawGame KEYDOWN =
+  [w]
+  where
+    w :: Widget ()
+    w = str "KEY," <=> str "DOWN!" <=> V.Vty.hBorder
+drawGame DefState =
   [w]
   where
     w :: Widget ()
     w = str "Hello," <=> str "World!" <=> V.Vty.hBorder
+drawGame MOUSESUPPORT =
+  [w]
+  where
+    w :: Widget ()
+    w = str "MOUSE," <=> str "OK!" <=> V.Vty.hBorder
 
+updateECS :: GameState -> GameState
+updateECS g = g
+
+
+{-
+NOTE TO SELF
+
+YOU NEED TO SET MOUSE SUPPORT BEFORE
+ACTUALLY RUNNING THE EVENT HANDLE FUNCTION
+
+SO THIS MIGHT BE A GOOD TIME TO USE THE appStartEvent???
+
+-}
 
 eventHandle :: BrickEvent () TickUpdate -> EventM () GameState ()
+eventHandle (MouseDown n _ _ _) = do
+
+  vty <- getVtyHandle
+  let output = V.outputIface vty
+  when (V.supportsMode output V.Mouse) $
+      liftIO $ V.setMode output V.Mouse True
+  --it might be easier to use lens here, but for me it's clearer
+  --what's happening with MonadState
+  s <- MS.get -- get and then update ecs
+  MS.put $ updateECS MOUSESUPPORT
+  return ()
+eventHandle (VtyEvent (V.EvKey _ _)) = do -- this works!
+  vty <- getVtyHandle
+  let output = V.outputIface vty
+  when (V.supportsMode output V.Mouse) $
+      liftIO $ V.setMode output V.Mouse True
+  s <- MS.get
+  MS.put $ updateECS KEYDOWN
+  return ()
+eventHandle (VtyEvent (V.EvMouseDown {})) = do 
+  vty <- getVtyHandle
+  let output = V.outputIface vty
+  when (V.supportsMode output V.Mouse) $
+      liftIO $ V.setMode output V.Mouse True
+  s <- MS.get
+  MS.put $ updateECS MOUSESUPPORT
+  return ()
 eventHandle be = do
   return ()
-
 
 -- attribute maps
 -- reminds me a little bit of CSS
 dummyMap :: AttrMap
 dummyMap = attrMap V.defAttr []
 
+
 main :: IO ()
 main = do
   _ <- defaultMain app initState
   return ()
   where
-    initState = MyState
+    initState = DefState
     -- using Unit () as name. Name would have to derive/implement Ord class
     app :: App GameState TickUpdate ()
     app = App {
@@ -131,5 +183,4 @@ main = do
           , appHandleEvent  = eventHandle
           , appStartEvent   = return () -- do nothing
           , appAttrMap      = const $ dummyMap
-
           }
