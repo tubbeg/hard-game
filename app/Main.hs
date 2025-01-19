@@ -121,42 +121,18 @@ drawGame MOUSESUPPORT =
 updateECS :: GameState -> GameState
 updateECS g = g
 
-
-{-
-NOTE TO SELF
-
-YOU NEED TO SET MOUSE SUPPORT BEFORE
-ACTUALLY RUNNING THE EVENT HANDLE FUNCTION
-
-SO THIS MIGHT BE A GOOD TIME TO USE THE appStartEvent???
-
--}
-
 eventHandle :: BrickEvent () TickUpdate -> EventM () GameState ()
 eventHandle (MouseDown n _ _ _) = do
-
-  vty <- getVtyHandle
-  let output = V.outputIface vty
-  when (V.supportsMode output V.Mouse) $
-      liftIO $ V.setMode output V.Mouse True
   --it might be easier to use lens here, but for me it's clearer
   --what's happening with MonadState
   s <- MS.get -- get and then update ecs
   MS.put $ updateECS MOUSESUPPORT
   return ()
 eventHandle (VtyEvent (V.EvKey _ _)) = do -- this works!
-  vty <- getVtyHandle
-  let output = V.outputIface vty
-  when (V.supportsMode output V.Mouse) $
-      liftIO $ V.setMode output V.Mouse True
   s <- MS.get
   MS.put $ updateECS KEYDOWN
   return ()
 eventHandle (VtyEvent (V.EvMouseDown {})) = do 
-  vty <- getVtyHandle
-  let output = V.outputIface vty
-  when (V.supportsMode output V.Mouse) $
-      liftIO $ V.setMode output V.Mouse True
   s <- MS.get
   MS.put $ updateECS MOUSESUPPORT
   return ()
@@ -167,6 +143,15 @@ eventHandle be = do
 -- reminds me a little bit of CSS
 dummyMap :: AttrMap
 dummyMap = attrMap V.defAttr []
+
+
+-- yep, this works really well
+setMouseSupport :: EventM () GameState ()
+setMouseSupport = do
+  vty <- getVtyHandle
+  let output = V.outputIface vty
+  when (V.supportsMode output V.Mouse) $
+      liftIO $ V.setMode output V.Mouse True
 
 
 main :: IO ()
@@ -181,6 +166,6 @@ main = do
             appDraw         = drawGame
           , appChooseCursor = neverShowCursor
           , appHandleEvent  = eventHandle
-          , appStartEvent   = return () -- do nothing
+          , appStartEvent   = setMouseSupport
           , appAttrMap      = const $ dummyMap
           }
