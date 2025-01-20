@@ -79,7 +79,8 @@ executable hard-game
         vty,
         lens,
         extra,
-        mtl
+        mtl,
+        h-raylib
 
     -- Directories containing source files.
     hs-source-dirs:   app

@@ -28,7 +28,13 @@ instance Monoid Chips where
     mempty = C 0 --we can use the monoid for the inital value
     -- but this might not be necessary
 
--- smart constructor. Do not export constructor for Rank
+{-
+
+not exporting the constructor, just the type itself
+which means the only way to create a rank is with the
+makeRank function. This means that we have guarantees.
+I'm really starting to understand why Haskell is awesome
+-}
 makeRank :: Int -> Maybe Rank
 makeRank i
     | i < 15 && i > 1 = Just $ R i
