@@ -4,16 +4,22 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TypeFamilies               #-}
-module Deck (makeRank, Rank, Suit(Clubs, Hearts, Spades, Diamonds), rankToDefaultChips, Chips) where
+module Deck (
+    makeRank, Rank, Suit(Clubs, Hearts, Spades, Diamonds),
+    rankToDefaultChips, Chips, defaultDeck, Location(Deck, Hand)) where
 import Apecs
 
-newtype Rank = R Int
+newtype Rank = R Int deriving Show
 instance Component Rank where
     type Storage Rank = Map Rank
 
-data Suit = Clubs | Diamonds | Hearts | Spades
+data Suit = Clubs | Diamonds | Hearts | Spades deriving Show
 instance Component Suit where
     type Storage Suit = Map Suit
+
+data Location = Hand | Deck deriving Show
+instance Component Location where
+  type Storage Location = Map Location
 
 newtype Chips = C Int
 instance Component Chips where
@@ -46,3 +52,22 @@ rankToDefaultChips (R r)
   | r > 1 && r < 11 = C r
   | r == 15 = C 11
   | otherwise = C 10
+
+defaultRanks :: [Rank]
+defaultRanks =
+  foldr f [] rankMaybs
+  where
+    numbers = [2..14]
+    rankMaybs = [makeRank x | x <- numbers] -- list comprehension
+    f ::  Maybe Rank -> [Rank] -> [Rank]
+    f (Just someRank) l = someRank:l
+    f Nothing rankList = rankList
+
+defaultDeck :: [(Rank, Suit)]
+defaultDeck =
+    spades ++ hearts ++ clubs ++ diamonds
+    where
+      spades = [(r, Spades) | r <- defaultRanks]
+      hearts = [(r, Hearts) | r <- defaultRanks]
+      clubs = [(r, Clubs) | r <- defaultRanks]
+      diamonds = [(r, Diamonds) | r <- defaultRanks]

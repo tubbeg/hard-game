@@ -81,7 +81,9 @@ executable hard-game
         lens,
         extra,
         mtl,
-        h-raylib
+        h-raylib,
+        array,
+        random-shuffle
 
     -- Directories containing source files.
     hs-source-dirs:   app

@@ -15,15 +15,18 @@ import Raylib.Types (Texture, Color, KeyboardKey(KeyA))
 import Apecs
 import System
 
+-- I highly suspect that there is an easier
+-- solution than this
+
 
 loadRimage :: String -> System' Texture
 loadRimage s = do
   img <- liftIO $ loadImage s
   liftIO $ loadTextureFromImage img
 
-createWindow :: () -> System' WindowResources
-createWindow () = do
-  window <- liftIO $ initWindow 500 500 "git gud"
+createWindow :: (Int,Int) -> String -> System' WindowResources
+createWindow (x,y) title = do
+  window <- liftIO $ initWindow x y title
   liftIO $ setTargetFPS 60
   return window
 
@@ -42,8 +45,8 @@ keyD k = liftIO $ isKeyDown k
 closeW :: WindowResources -> System'()
 closeW w = liftIO $ closeWindow $ Just w
 
-drawTxt :: Texture -> Int -> Int -> Color -> System'()
-drawTxt t x y c = liftIO $ drawTexture t x y c
+drawTxt :: Texture -> (Int,Int) -> Color -> System'()
+drawTxt t (x,y) c = liftIO $ drawTexture t x y c
 
 clearBckgrnd :: Color -> System'()
 clearBckgrnd c = liftIO $ clearBackground c

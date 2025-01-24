@@ -18,50 +18,55 @@ import System.Exit
 import Control.Monad
 import Data.Monoid
 import Data.Semigroup (Semigroup)
-import Deck(makeRank, Rank, Suit(Diamonds,Clubs,Hearts,Spades), rankToDefaultChips, Chips)
+import Deck(makeRank, defaultDeck, Rank, Suit(Diamonds,Clubs,Hearts,Spades), rankToDefaultChips, Chips)
 import Data.Time.Clock
 import Data.Fixed (Pico)
-import Control.Monad.State.Class as MS
-import Graphics.Vty (Input(Input))
-import Raylib.Core.Textures
-  ( drawTexture,
-    drawTexturePro,
-    genImagePerlinNoise,
-    loadImage,
-    loadRenderTexture,
-    loadTextureFromImage, loadImageFromTexture,
-  )
-import Raylib.Core (clearBackground, isKeyDown, beginDrawing, endDrawing, initWindow, setTargetFPS, windowShouldClose, closeWindow)
-import Raylib.Core.Text (drawText)
-import Raylib.Util (drawing, raylibApplication, WindowResources, managed)
+import Raylib.Util (WindowResources)
 import Raylib.Util.Colors (lightGray, rayWhite)
 import Raylib.Types (Texture, Color, KeyboardKey(KeyA))
 import RaylibLift
 import System
+    ( GameInput(..),
+      Order(Pos),
+      Ginput(GKey, GMouse, GNoInput),
+      System',
+      initWorld,
+      Location(Hand, Deck))
+import System.Random
+import Data.Ix (Ix(inRange))
+import System.Random
+import Data.Array.IO
+import Control.Monad
+import System.Random
+import System.Random.Shuffle (shuffle')
 
-defaultRanks :: [Rank]
-defaultRanks =
-  foldr f [] rankMaybs
+
+
+-- to be removed later
+randomPos :: System' (Int,Int)
+randomPos = do
+  a <- randNumInRange 0 500
+  b <- randNumInRange 0 500
+  return (a,b)
+
+
+shuffleList :: [Entity] -> IO [Entity]
+shuffleList l = do
+  -- rng <- newStdGen
+  -- return $ shuffle' l len rng
+  shuffle' l len <$> newStdGen
   where
-    numbers = [2..14]
-    rankMaybs = [makeRank x | x <- numbers] -- list comprehension
-    f ::  Maybe Rank -> [Rank] -> [Rank]
-    f (Just someRank) l = someRank:l
-    f Nothing rankList = rankList
+    len = length l
 
-defaultDeck :: [(Rank, Suit)]
-defaultDeck =
-    spades ++ hearts ++ clubs ++ diamonds
-    where
-      spades = [(r, Spades) | r <- defaultRanks]
-      hearts = [(r, Hearts) | r <- defaultRanks]
-      clubs = [(r, Clubs) | r <- defaultRanks]
-      diamonds = [(r, Diamonds) | r <- defaultRanks]
-
+-- I think that position should be calculated
+-- based on window heightXwidth rather than fixed
+-- but you could possibly have like an order
 createDeck :: [(Rank, Suit)] -> System' ()
 createDeck [] = return ()
 createDeck ((r,s):remainingDeck) = do
-  _ <- newEntity (s, r, chips)
+  -- newEntity_ is the same as "_ <- newEntity" 
+  p <- randomPos
+  _ <- newEntity (s, r, chips, Deck, Pos p)
   createDeck remainingDeck
   where
     chips = rankToDefaultChips r
@@ -74,11 +79,70 @@ addInputEntity = do
     i :: GameInput
     i = Gin GNoInput
 
-initialize :: System' ()
-initialize = do
-  createDeck defaultDeck
-  addInputEntity
-  return ()
+getRandomNrInRange :: Int -> IO Int
+getRandomNrInRange i = do
+  nr :: Int <- randomIO
+  if inRange (0,i) nr
+    then return nr
+    else getRandomNrInRange i
+
+getRandomElement :: [a] -> IO a
+getRandomElement l = do
+  nr <- getRandomNrInRange listLength
+  return $ l !! nr
+  where
+    listLength = length l
+
+gameSize :: (Int,Int)
+gameSize = (800, 600)
+
+defaultHandSize :: Int
+defaultHandSize = 8
+
+numberOfCards :: System' (Int,Int)
+numberOfCards = do
+  cfold f (0,0)
+  where
+    f :: (Int,Int) -> Location -> (Int,Int)
+    f (n,m) Hand = (n + 1, m)
+    f (n,m) Deck = (n,m + 1)
+
+getAllEntitesWithDeck :: System' [Entity]
+getAllEntitesWithDeck =
+  cfoldM f []
+  where
+    f :: [Entity] -> (Location, Entity) -> System' [Entity]
+    f acc (Deck, ety) = return (ety:acc)
+    f acc _ = return acc
+
+takeFirstN ::  Int -> [Entity] -> [Entity]
+takeFirstN n = foldl f []
+  where
+    f acc e =
+      if length acc >= n
+        then acc
+        else e:acc
+
+hasEntity :: [Entity] -> Entity ->  Bool
+hasEntity [] _ = False
+hasEntity (entity:remainder) e =
+  (e == entity) || hasEntity remainder e
+
+moveCards :: Int -> System' ()
+moveCards i = do
+  ents <- getAllEntitesWithDeck
+  l <- liftIO $ shuffleList $ takeFirstN i ents
+  cmapM_ $ \(_ :: Location, ety :: Entity) -> do
+    when (hasEntity l ety) $ do
+      set ety Hand
+
+addCardsToHand :: System'()
+addCardsToHand = do
+  (nr,_) <- numberOfCards
+  if nr >= defaultHandSize
+    then return ()
+    else moveCards $ defaultHandSize - nr
+
 
 getDeltaTime :: UTCTime -> UTCTime -> Pico
 getDeltaTime a b =
@@ -86,8 +150,6 @@ getDeltaTime a b =
   where
     p = diffUTCTime a b
     dt = nominalDiffTimeToSeconds p
-
-data TickUpdate = Tick
 
 inputSystemStr :: System' (Maybe String)
 inputSystemStr = do
@@ -98,13 +160,12 @@ inputSystemStr = do
     f _ (Gin GMouse) = Just "gmouse"
     f _ _ = Nothing
 
-
 drawMyText ::Texture -> System'()
 drawMyText t = do
   isDoStuff <- inputSystemStr
   case isDoStuff of
     Nothing -> return ()
-    (Just _) -> drawTxt t 0 0 lightGray 
+    (Just _) -> drawTxt t (0,0) lightGray
 
 changeInput :: Bool -> System'()
 changeInput False = do
@@ -121,34 +182,63 @@ changeInput True = do
     f (Gin GNoInput) = Gin GKey
     f ga = ga
 
-drawLoop_ ::  Maybe String -> Bool -> (WindowResources, Texture) -> System' ()
-drawLoop_ st False (w,t) = do
+randNumInRange :: Int -> Int -> System' Int
+randNumInRange m mx = do
+  randomRIO (m,mx)
+
+drawCards :: Texture  -> System' ()
+drawCards t = do
+  cmapM_ f
+  where
+    orderToTuple (Pos (x,y)) = (x,y)
+    f (Hand, ety :: Entity) = do
+      r :: Rank <- get ety
+      s :: Suit <- get ety
+      pos :: Order <- get ety
+      drawTxt t (orderToTuple pos) lightGray
+      liftIO $ putStrLn $ "Rank Suit" <> show r <> show s
+      return ()
+    f _ = return ()
+
+drawLoop_ ::  Maybe String -> Bool -> (WindowResources, Texture, Texture) -> System' ()
+drawLoop_ st False (w,t,t2) = do
     startDraw
     keyA <- keyD KeyA
     changeInput keyA
     drawT "Wow so cool" 30 40 18 lightGray
     drawMyText t
     clearBckgrnd rayWhite
+    drawCards t2
     endDraw
     s <- shouldCloseW
-    drawLoop_ st s (w,t)
-drawLoop_ _ True (w,_) = do  
+    drawLoop_ st s (w,t,t2)
+drawLoop_ _ True (w,_,_) = do
     closeW w
     return ()
+
+initialize :: System' ()
+initialize = do
+  createDeck defaultDeck
+  addInputEntity
+  addCardsToHand
+  return ()
 
 draw :: System'()
 draw = do
   initialize
-  st <- inputSystemStr 
-  w <- createWindow ()
+  st <- inputSystemStr
+  w <- createWindow gameSize "my awesome and cool game"
   t <- loadRimage "./sprite.png"
-  drawLoop_ st False (w,t)
+  t2 <- loadRimage "./sprite2.png"
+  t3 <- loadRimage "./sprite2.png"
+  drawLoop_ st False (w,t,t2)
 
 main :: IO ()
 main = do
   putStrLn "hello hello hello"
   w <- initWorld
   runSystem draw w
-     
-     
+
+
+
 
